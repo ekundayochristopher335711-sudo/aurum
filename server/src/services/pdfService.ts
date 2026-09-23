@@ -1,11 +1,42 @@
-import PDFDocument from 'pdfkit'
+﻿import PDFDocument from 'pdfkit'
 import { Response } from 'express'
 import { LOGO_BASE64 } from '../assets/logoBase64'
 
 const GOLD = '#B45309'
 const NAVY = '#0F1F4B'
-const MUTED = '#64748B'
-const RULE = '#D8DEE9'
+const SLATE = '#3D4E6B'
+const MUTED = '#5C6B84'
+const RULE = '#C9D3E3'
+const BODY = '#243044'
+
+// UK date (DD/MM/YYYY) - empty for missing values, so nothing renders as N/A
+function fmtDate(value: unknown): string {
+  if (!value) return ''
+  const d = new Date(value as string)
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-GB')
+}
+
+// £27,500,000.00 - UK grouping, two decimals (master template §15)
+function fmtMoney(n: number): string {
+  return `£${n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
+// OPEN -> Open, COMPENSATION_EVENT -> Compensation Event (display only - the
+// stored data is never altered)
+function humanize(value: unknown): string {
+  const s = String(value ?? '').trim()
+  if (!s) return ''
+  return s.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+// A value that must never reach the page (§5: never show N/A, null, undefined
+// or dashes - the field is omitted instead)
+function cleanValue(value: unknown): string {
+  const s = String(value ?? '').trim()
+  if (!s) return ''
+  if (['N/A', 'n/a', '-', '—', 'null', 'undefined', 'TBC', 'None', 'Not specified'].includes(s)) return ''
+  return s
+}
 
 const LOGO = Buffer.from(LOGO_BASE64, 'base64')
 
@@ -32,55 +63,102 @@ export function fileNameFor(project: ProjectMeta | string, ref: string, ext = 'p
 
 const asMeta = (p: ProjectMeta | string): ProjectMeta => (typeof p === 'string' ? { name: p } : p)
 
-// Company letterhead: logo left, PROJECT NAME as the document heading.
-// Returns the y position where body content should begin.
+// Company letterhead: platform identity left, contact block right (§2).
+// The project itself lives in the banner below. Returns the y position where
+// the project banner should begin.
 function addLetterhead(doc: Doc, project: ProjectMeta): number {
   const left = 40
   const right = doc.page.width - 40
 
   try {
-    doc.image(LOGO, left, 34, { fit: [52, 52] })
+    doc.image(LOGO, left, 34, { fit: [50, 50] })
   } catch {
     // A missing/corrupt logo must never break a contractual document
   }
 
-  const textX = left + 64
-  doc.font('Helvetica-Bold').fontSize(17).fillColor(NAVY)
-    .text((project.name || 'Project').toUpperCase(), textX, 40, { width: right - textX - 10, lineBreak: false })
+  const textX = left + 62
+  doc.font('Helvetica-Bold').fontSize(19).fillColor(NAVY)
+    .text('AURUM', textX, 36, { lineBreak: false, characterSpacing: 2 })
+  doc.font('Helvetica').fontSize(8).fillColor(SLATE)
+    .text('PROJECT CONTROLS', textX, 57, { lineBreak: false, characterSpacing: 2.2 })
+  doc.font('Helvetica').fontSize(6.5).fillColor(MUTED)
+    .text('NEC DEADLINES, NEVER MISSED', textX, 70, { lineBreak: false, characterSpacing: 1.2 })
 
-  const meta = [
-    project.clientName ? `Client: ${project.clientName}` : null,
-    project.contractorName ? `Contractor: ${project.contractorName}` : null,
-    project.contractType ? `${project.contractType} Contract` : null,
-  ].filter(Boolean).join('   ·   ')
+  // Subtle vertical separator between identity and contact block
+  const divX = doc.page.width / 2 + 20
+  doc.moveTo(divX, 36).lineTo(divX, 88).lineWidth(0.75).strokeColor(RULE).stroke()
 
-  doc.font('Helvetica').fontSize(8.5).fillColor(MUTED)
-    .text(meta || 'Project Controls Document', textX, 62, { width: right - textX - 10, lineBreak: false })
+  // Contact block - real platform details only, never invented ones (§15)
+  const contactX = divX + 12
+  doc.font('Helvetica').fontSize(7.8).fillColor(SLATE)
+  doc.text('notifications@aurumite.com', contactX, 38, { width: right - contactX, align: 'right', lineBreak: false })
+  doc.text('www.aurumite.com', contactX, 50, { width: right - contactX, align: 'right', lineBreak: false })
+  doc.font('Helvetica').fontSize(7).fillColor(MUTED)
+  doc.text('NEC3 & NEC4 Contract Administration', contactX, 66, { width: right - contactX, align: 'right', lineBreak: false })
 
   // Double rule - the traditional letterhead divider
-  doc.moveTo(left, 94).lineTo(right, 94).lineWidth(2).strokeColor(NAVY).stroke()
-  doc.moveTo(left, 98).lineTo(right, 98).lineWidth(0.75).strokeColor(GOLD).stroke()
+  doc.moveTo(left, 98).lineTo(right, 98).lineWidth(2).strokeColor(NAVY).stroke()
+  doc.moveTo(left, 102).lineTo(right, 102).lineWidth(0.75).strokeColor(GOLD).stroke()
   doc.lineWidth(1)
 
-  return 116
+  return 114
 }
 
-// Formal, centred document title - bold and letter-spaced like a legal notice
+// Project information bar - full-width navy band directly under the
+// letterhead, identical on every exported document type (§3, §17).
+function addProjectBanner(doc: Doc, project: ProjectMeta): void {
+  const left = 40
+  const width = doc.page.width - 80
+  const y = doc.y
+  const height = 56
+  doc.rect(left, y, width, height).fill(NAVY)
+  doc.font('Helvetica-Bold').fontSize(14).fillColor('#FFFFFF')
+    .text(project.name || 'Project', left + 14, y + 9, { width: width - 28, lineBreak: false })
+  const line2 = [
+    project.clientName ? `Client: ${project.clientName}` : '',
+    project.contractorName ? `Contractor: ${project.contractorName}` : '',
+    project.contractType ? `Contract: ${project.contractType}` : '',
+  ].filter(Boolean).join('    |    ')
+  if (line2) {
+    doc.font('Helvetica').fontSize(8.5).fillColor('#C7D2E8')
+      .text(line2, left + 14, y + 33, { width: width - 28, lineBreak: false })
+  }
+  doc.y = y + height + 16
+}
+
+// Simplified continuation header for page 2+ (§10) - never the full letterhead.
+function addContinuationHeader(doc: Doc, project: ProjectMeta, docType?: string, reference?: string): void {
+  doc.font('Helvetica-Bold').fontSize(8.5).fillColor(NAVY)
+    .text('AURUM PROJECT CONTROLS', 40, 38, { lineBreak: false, characterSpacing: 1.2 })
+  const line2 = [
+    project.name || 'Project',
+    docType,
+    reference ? `Reference: ${reference}` : '',
+  ].filter(Boolean).join('   |   ')
+  doc.font('Helvetica').fontSize(7.8).fillColor(MUTED)
+    .text(line2, 40, 50, { width: doc.page.width - 80, lineBreak: false })
+  doc.moveTo(40, 62).lineTo(doc.page.width - 40, 62).lineWidth(0.75).strokeColor(RULE).stroke()
+  doc.lineWidth(1)
+  doc.y = 74
+}
+
+// Document title - strong left-aligned dark-navy heading with the reference
+// beneath it and a short accent underline (master template §4).
 function addDocumentTitle(doc: Doc, title: string, reference?: string, y?: number): number {
   const top = y ?? doc.y
-  doc.font('Helvetica-Bold').fontSize(15).fillColor(NAVY)
-    .text(title.toUpperCase(), 40, top, { width: doc.page.width - 80, align: 'center', characterSpacing: 1.6 })
+  doc.font('Helvetica-Bold').fontSize(23).fillColor(NAVY)
+    .text(title.toUpperCase(), 40, top, { width: doc.page.width - 80, characterSpacing: 1.2, lineBreak: false })
 
-  let next = doc.y + 4
+  let next = doc.y + 6
   if (reference) {
-    doc.font('Helvetica').fontSize(9.5).fillColor(MUTED)
-      .text(reference, 40, next, { width: doc.page.width - 80, align: 'center' })
-    next = doc.y + 4
+    doc.font('Helvetica').fontSize(10.5).fillColor(SLATE)
+      .text(reference, 40, next, { width: doc.page.width - 80, lineBreak: false })
+    next = doc.y + 5
   }
-  doc.moveTo(doc.page.width / 2 - 40, next + 4).lineTo(doc.page.width / 2 + 40, next + 4)
-    .lineWidth(1.5).strokeColor(GOLD).stroke()
+  doc.moveTo(40, next + 4).lineTo(76, next + 4).lineWidth(3).strokeColor(GOLD).stroke()
+  doc.moveTo(40, next + 14).lineTo(doc.page.width - 40, next + 14).lineWidth(0.75).strokeColor(RULE).stroke()
   doc.lineWidth(1)
-  return next + 20
+  return next + 28
 }
 
 // Draws the footer on the CURRENT page. The bottom margin is temporarily
@@ -90,14 +168,17 @@ function drawFooter(doc: Doc, project: ProjectMeta, reference: string, pageNum: 
   const savedBottom = doc.page.margins.bottom
   doc.page.margins.bottom = 0
 
-  const y = doc.page.height - 42
-  doc.moveTo(40, y - 8).lineTo(doc.page.width - 40, y - 8).lineWidth(0.5).strokeColor(RULE).stroke()
+  const y = doc.page.height - 52
+  doc.moveTo(40, y - 10).lineTo(doc.page.width - 40, y - 10).lineWidth(0.75).strokeColor(RULE).stroke()
   doc.lineWidth(1)
-  doc.font('Helvetica').fontSize(7.5).fillColor(MUTED)
-    .text(`${project.name}  |  ${reference}  |  Generated ${new Date().toLocaleString('en-GB')}  |  CONFIDENTIAL`,
-      40, y, { width: doc.page.width - 140, lineBreak: false })
-  doc.font('Helvetica').fontSize(7.5).fillColor(MUTED)
-    .text(`Page ${pageNum} of ${pageCount}`, doc.page.width - 130, y, { width: 90, align: 'right', lineBreak: false })
+  const now = new Date()
+  doc.font('Helvetica').fontSize(7.4).fillColor(MUTED)
+    .text(`AURUM PROJECT CONTROLS  |  ${project.name}  |  ${reference}  |  Generated ${now.toLocaleDateString('en-GB')} ${now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`,
+      40, y - 4, { width: doc.page.width - 140, lineBreak: false })
+  doc.font('Helvetica').fontSize(7.4).fillColor(MUTED)
+    .text(`Page ${pageNum} of ${pageCount}`, doc.page.width - 130, y - 4, { width: 90, align: 'right', lineBreak: false })
+  doc.font('Helvetica').fontSize(6.5).fillColor(SLATE)
+    .text('SAFETY   |   QUALITY   |   INTEGRITY   |   DELIVERY', 40, y + 8, { lineBreak: false, characterSpacing: 1.2 })
 
   doc.page.margins.bottom = savedBottom
 }
@@ -117,46 +198,85 @@ function finalise(doc: Doc, project: ProjectMeta, reference: string) {
 // Section heading: a bold label above a hairline rule (formal, not a colour bar)
 function sectionTitle(doc: Doc, text: string) {
   const y = doc.y
-  doc.font('Helvetica-Bold').fontSize(9.5).fillColor(NAVY)
-    .text(text.toUpperCase(), 40, y, { characterSpacing: 0.6 })
-  const ruleY = doc.y + 3
+  doc.font('Helvetica-Bold').fontSize(12).fillColor(NAVY)
+    .text(text.toUpperCase(), 40, y, { characterSpacing: 0.8 })
+  const ruleY = doc.y + 5
   doc.moveTo(40, ruleY).lineTo(doc.page.width - 40, ruleY).lineWidth(0.75).strokeColor(RULE).stroke()
   doc.lineWidth(1)
-  doc.y = ruleY + 10
-  doc.fillColor(NAVY)
+  doc.y = ruleY + 14
+  doc.fillColor(BODY)
 }
 
-// Aligned label/value pairs - reads like a formal record, not a form dump
+// Two-column metadata grid - small grey labels above navy values (§5).
+// Fields with no value are omitted entirely; nothing ever renders as N/A.
 function fieldTable(doc: Doc, fields: Array<[string, string]>) {
-  const labelW = 125
-  fields.forEach(([label, value]) => {
-    const y = doc.y
-    doc.font('Helvetica').fontSize(9).fillColor(MUTED).text(label, 40, y, { width: labelW })
-    doc.font('Helvetica-Bold').fontSize(9).fillColor(NAVY)
-      .text(value || '-', 40 + labelW, y, { width: doc.page.width - 80 - labelW })
-    doc.y = Math.max(doc.y, y + 14)
-    doc.moveDown(0.15)
+  const cleaned = fields
+    .map(([label, value]) => [label, cleanValue(value)] as [string, string])
+    .filter(([, value]) => value !== '')
+  const colW = (doc.page.width - 80 - 28) / 2
+  const gap = 28
+  let row: Array<[string, string]> = []
+  let rowHeights: number[] = []
+  const drawRow = () => {
+    if (row.length === 0) return
+    const startY = doc.y
+    const h = Math.max(30, Math.max(...rowHeights) + 24)
+    row.forEach(([label, value], i) => {
+      const x = 40 + i * (colW + gap)
+      doc.font('Helvetica').fontSize(8).fillColor(MUTED)
+        .text(label, x, startY, { width: colW, lineBreak: false })
+      doc.font('Helvetica-Bold').fontSize(10).fillColor(NAVY)
+        .text(value, x, startY + 12, { width: colW, lineGap: 1.5 })
+    })
+    doc.y = startY + h
+    row = []
+    rowHeights = []
+  }
+  cleaned.forEach(([label, value]) => {
+    doc.font('Helvetica-Bold').fontSize(10)
+    rowHeights.push(12 + doc.heightOfString(value, { width: colW, lineGap: 1.5 }))
+    row.push([label, value])
+    if (row.length === 2) drawRow()
   })
-  doc.font('Helvetica')
+  drawRow()
+  doc.y += 6
+  doc.font('Helvetica').fillColor(BODY)
 }
 
+// Engineering-document table row: navy header row with white text, thin
+// bordered cells, naturally wrapping body text (§7). Text can never spill
+// outside a cell - the row grows to fit the wrapped content.
 function tableRow(doc: Doc, cols: string[], widths: number[], isHeader = false, y?: number) {
   const startY = y ?? doc.y
+  const pad = 5
+  const font = isHeader ? 'Helvetica-Bold' : 'Helvetica'
+  const size = isHeader ? 8.5 : 8.25
+  doc.font(font).fontSize(size)
+  const texts = cols.map((c) => String(c ?? ''))
+  const textHeights = texts.map((t, i) =>
+    doc.heightOfString(t, { width: widths[i] - pad * 2, lineGap: 1.5 }),
+  )
+  const rowH = Math.max(...textHeights) + (isHeader ? 10 : 9)
+  const totalW = widths.reduce((a, b) => a + b, 0)
+
+  if (isHeader) {
+    doc.rect(40, startY, totalW, rowH).fill(NAVY)
+  } else {
+    doc.lineWidth(0.5).rect(40, startY, totalW, rowH).fillAndStroke('#FFFFFF', RULE)
+  }
   let x = 40
-  if (isHeader) doc.rect(40, startY, widths.reduce((a, b) => a + b, 0), 18).fill('#EEF2F7')
-  cols.forEach((col, i) => {
-    doc
-      .font(isHeader ? 'Helvetica-Bold' : 'Helvetica')
-      .fontSize(isHeader ? 8.5 : 8)
-      .fillColor(isHeader ? NAVY : '#334155')
-      .text(col, x + 4, startY + 5, { width: widths[i] - 8, lineBreak: false })
+  texts.forEach((t, i) => {
+    if (i > 0) {
+      doc.moveTo(x, startY).lineTo(x, startY + rowH).lineWidth(0.5).strokeColor(RULE).stroke()
+    }
+    doc.font(font).fontSize(size)
+      .fillColor(isHeader ? '#FFFFFF' : BODY)
+      .text(t, x + pad, startY + 5, { width: widths[i] - pad * 2, lineGap: 1.5 })
     x += widths[i]
   })
-  doc.moveTo(40, startY + 20).lineTo(40 + widths.reduce((a, b) => a + b, 0), startY + 20)
-    .lineWidth(0.5).strokeColor(RULE).stroke()
   doc.lineWidth(1)
-  doc.y = startY + 22
-  doc.font('Helvetica')
+  doc.font('Helvetica').fillColor(BODY)
+  doc.y = startY + rowH
 }
 
 // Signature block - what makes a notice read as a served contractual document
@@ -182,34 +302,49 @@ export function generateEarlyWarningPDF(
 ) {
   const meta = asMeta(project)
   const ref = String(ew['ewNumber'] ?? 'EW')
-  const doc = new PDFDocument({ size: 'A4', margin: 40, bufferPages: true })
+  const doc = new PDFDocument({ size: 'A4', margins: { top: 40, left: 40, bottom: 64, right: 40 }, bufferPages: true })
   res.setHeader('Content-Type', 'application/pdf')
   res.setHeader('Content-Disposition', `attachment; filename="${fileNameFor(meta, ref)}"`)
   doc.pipe(res)
 
-  const top = addLetterhead(doc, meta)
-  doc.y = addDocumentTitle(doc, 'Early Warning Notice', `Notice Reference: ${ref}  ·  NEC Clause 15.1`, top)
+  addLetterhead(doc, meta)
+  addProjectBanner(doc, meta)
+  doc.y = addDocumentTitle(doc, 'Early Warning', `Reference: ${ref}`)
 
   sectionTitle(doc, 'Particulars')
   fieldTable(doc, [
-    ['Early Warning No.', ref],
     ['Subject', String(ew['title'] ?? '')],
-    ['Status', String(ew['status'] ?? '')],
-    ['Date Raised', ew['dateRaised'] ? new Date(ew['dateRaised'] as string).toLocaleDateString('en-GB') : ''],
-    ['Date Required By', ew['dateRequired'] ? new Date(ew['dateRequired'] as string).toLocaleDateString('en-GB') : 'Not specified'],
+    ['Status', humanize(ew['status'])],
+    ['Date Raised', fmtDate(ew['dateRaised'])],
+    ['Date Required By', fmtDate(ew['dateRequired'])],
     ['Raised By', String(ew['raisedBy'] ?? '')],
-    ['Assigned To', String(ew['assignedTo'] ?? 'Unassigned')],
+    ['Assigned To', String(ew['assignedTo'] ?? '')],
+    ['NEC Clause', '15.1'],
   ])
 
-  doc.moveDown(1)
+  doc.moveDown(0.5)
   sectionTitle(doc, 'Description of the Matter')
-  doc.font('Helvetica').fontSize(9.5).fillColor(NAVY)
+  doc.font('Helvetica').fontSize(9.75).fillColor(BODY)
     .text(String(ew['description'] ?? ''), 40, doc.y, { width: doc.page.width - 80, lineGap: 4, align: 'justify' })
 
-  doc.moveDown(1.5)
+  doc.moveDown(1.2)
   doc.font('Helvetica-Oblique').fontSize(8).fillColor(MUTED)
     .text('This Early Warning is given under the contract and forms part of the project record. Recipients should attend the next early warning meeting where this matter will be considered.',
       40, doc.y, { width: doc.page.width - 80, lineGap: 2 })
+
+  // Document control block (§12) - only real data; approval fields are never
+  // invented for records the application does not hold.
+  if (doc.y > doc.page.height - 250) {
+    doc.addPage()
+    addContinuationHeader(doc, meta, 'Early Warning', ref)
+  }
+  sectionTitle(doc, 'Document Control')
+  const ctrlW = [110, 373]
+  tableRow(doc, ['Reference', ref], ctrlW)
+  tableRow(doc, ['Revision', '01'], ctrlW)
+  tableRow(doc, ['Date Raised', fmtDate(ew['dateRaised'])], ctrlW)
+  tableRow(doc, ['Prepared By', String(ew['raisedBy'] ?? '')], ctrlW)
+  doc.moveDown(0.5)
 
   signatureBlock(doc)
   finalise(doc, meta, ref)
@@ -234,36 +369,49 @@ export function generateNoticePDF(
   const meta = asMeta(project)
   const typeLabel = NOTICE_TYPE_LABELS[String(notice['type'])] ?? 'Notice'
   const ref = String(notice['noticeNumber'] ?? 'Notice')
-  const doc = new PDFDocument({ size: 'A4', margin: 40, bufferPages: true })
+  const doc = new PDFDocument({ size: 'A4', margins: { top: 40, left: 40, bottom: 64, right: 40 }, bufferPages: true })
   res.setHeader('Content-Type', 'application/pdf')
   res.setHeader('Content-Disposition', `attachment; filename="${fileNameFor(meta, ref)}"`)
   doc.pipe(res)
 
-  const top = addLetterhead(doc, meta)
-  doc.y = addDocumentTitle(doc, typeLabel, `Notice Reference: ${ref}`, top)
+  addLetterhead(doc, meta)
+  addProjectBanner(doc, meta)
+  doc.y = addDocumentTitle(doc, typeLabel, `Reference: ${ref}`)
 
   const ce = notice['ce'] as Record<string, unknown> | null
   sectionTitle(doc, 'Particulars')
   fieldTable(doc, [
-    ['Notice Number', ref],
     ['Notice Type', typeLabel],
     ['Subject', String(notice['title'] ?? '')],
     ['Issued By', String(notice['issuedBy'] ?? '')],
     ['Issued To', String(notice['issuedTo'] ?? '')],
-    ['Date Issued', notice['dateIssued'] ? new Date(notice['dateIssued'] as string).toLocaleDateString('en-GB') : ''],
-    ['Response Due', notice['dueDate'] ? new Date(notice['dueDate'] as string).toLocaleDateString('en-GB') : 'Not specified'],
-    ['Related Compensation Event', ce ? `${ce['ceNumber']} - ${ce['title']}` : 'None'],
+    ['Date Issued', fmtDate(notice['dateIssued'])],
+    ['Response Due', fmtDate(notice['dueDate'])],
+    ['Related Compensation Event', ce ? `${ce['ceNumber']} - ${ce['title']}` : ''],
   ])
 
-  doc.moveDown(1)
+  doc.moveDown(0.5)
   sectionTitle(doc, 'Notice')
-  doc.font('Helvetica').fontSize(9.5).fillColor(NAVY)
+  doc.font('Helvetica').fontSize(9.75).fillColor(BODY)
     .text(String(notice['content'] ?? ''), 40, doc.y, { width: doc.page.width - 80, lineGap: 4, align: 'justify' })
 
-  doc.moveDown(1.5)
+  doc.moveDown(1.2)
   doc.font('Helvetica-Oblique').fontSize(8).fillColor(MUTED)
     .text('This notice is issued under the contract and forms part of the project’s contractual record.',
       40, doc.y, { width: doc.page.width - 80 })
+
+  // Document control block (§12) - only data the application actually holds
+  if (doc.y > doc.page.height - 250) {
+    doc.addPage()
+    addContinuationHeader(doc, meta, typeLabel, ref)
+  }
+  sectionTitle(doc, 'Document Control')
+  const ctrlW = [110, 373]
+  tableRow(doc, ['Reference', ref], ctrlW)
+  tableRow(doc, ['Revision', '01'], ctrlW)
+  tableRow(doc, ['Date Issued', fmtDate(notice['dateIssued'])], ctrlW)
+  tableRow(doc, ['Issued By', String(notice['issuedBy'] ?? '')], ctrlW)
+  doc.moveDown(0.5)
 
   signatureBlock(doc)
   finalise(doc, meta, ref)
@@ -275,33 +423,34 @@ export function generateRiskRegisterPDF(
   project: ProjectMeta | string,
 ) {
   const meta = asMeta(project)
-  const doc = new PDFDocument({ size: 'A4', margin: 40, layout: 'landscape', bufferPages: true })
+  const doc = new PDFDocument({ size: 'A4', margins: { top: 40, left: 40, bottom: 64, right: 40 }, bufferPages: true })
   res.setHeader('Content-Type', 'application/pdf')
   res.setHeader('Content-Disposition', `attachment; filename="${fileNameFor(meta, 'Risk-Register')}"`)
   doc.pipe(res)
 
-  const top = addLetterhead(doc, meta)
-  doc.y = addDocumentTitle(doc, 'Risk Register', `${risks.length} item(s)  ·  ${new Date().toLocaleDateString('en-GB')}`, top)
+  addLetterhead(doc, meta)
+  addProjectBanner(doc, meta)
+  doc.y = addDocumentTitle(doc, 'Risk Register', `${risks.length} item(s)  ·  ${fmtDate(new Date())}`)
 
   const cols = ['Risk ID', 'Description', 'Prob', 'Cost (£)', 'Time (d)', 'Status', 'Owner']
-  const widths = [70, 250, 45, 80, 60, 75, 100]
+  const widths = [46, 152, 34, 62, 40, 62, 69]
   tableRow(doc, cols, widths, true)
 
   risks.forEach((r) => {
     const costRaw = r['costImpact']
-    const cost = typeof costRaw === 'number' ? costRaw.toLocaleString('en-GB') : 'N/A'
     tableRow(doc, [
       String(r['riskId'] ?? ''),
-      String(r['description'] ?? '').substring(0, 80),
+      String(r['description'] ?? ''),
       String(r['probability'] ?? ''),
-      cost,
-      r['timeImpact'] != null ? String(r['timeImpact']) : 'N/A',
-      String(r['status'] ?? ''),
-      String(r['owner'] ?? 'TBC'),
+      typeof costRaw === 'number' ? fmtMoney(costRaw) : '',
+      r['timeImpact'] != null ? String(r['timeImpact']) : '',
+      humanize(r['status']),
+      String(r['owner'] ?? ''),
     ], widths)
-    if (doc.y > doc.page.height - 80) {
+    if (doc.y > doc.page.height - 110) {
       doc.addPage()
-      doc.y = addLetterhead(doc, meta)
+      addContinuationHeader(doc, meta, 'Risk Register', `${risks.length} item(s)`)
+      tableRow(doc, cols, widths, true)
     }
   })
 
@@ -314,7 +463,7 @@ export function generateCESummaryPDF(
   project: ProjectMeta | string,
 ) {
   const meta = asMeta(project)
-  const doc = new PDFDocument({ size: 'A4', margin: 40, layout: 'landscape', bufferPages: true })
+  const doc = new PDFDocument({ size: 'A4', margins: { top: 40, left: 40, bottom: 64, right: 40 }, bufferPages: true })
   res.setHeader('Content-Type', 'application/pdf')
   res.setHeader('Content-Disposition', `attachment; filename="${fileNameFor(meta, 'CE-Summary')}"`)
   doc.pipe(res)
@@ -324,28 +473,30 @@ export function generateCESummaryPDF(
     return sum + (typeof v === 'number' ? v : 0)
   }, 0)
 
-  const top = addLetterhead(doc, meta)
+  addLetterhead(doc, meta)
+  addProjectBanner(doc, meta)
   doc.y = addDocumentTitle(doc, 'Compensation Event Summary',
-    `${ces.length} event(s)  ·  Total valuation £${total.toLocaleString('en-GB')}`, top)
+    `${ces.length} event(s)  ·  Total valuation £${total.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
 
-  const cols = ['CE No.', 'Title', 'Clause', 'Date Notified', 'Due Date', 'Valuation (£)', 'Status']
-  const widths = [60, 220, 60, 90, 90, 100, 90]
+  const cols = ['CE No.', 'Title', 'Clause', 'Notified', 'Due', 'Valuation (£)', 'Status']
+  const widths = [48, 130, 50, 60, 60, 80, 57]
   tableRow(doc, cols, widths, true)
 
   ces.forEach((ce) => {
     const val = ce['valuationAmount']
     tableRow(doc, [
       String(ce['ceNumber'] ?? ''),
-      String(ce['title'] ?? '').substring(0, 50),
-      String(ce['clauseRef'] ?? 'N/A'),
-      ce['dateNotified'] ? new Date(ce['dateNotified'] as string).toLocaleDateString('en-GB') : '',
-      ce['dateResponseDue'] ? new Date(ce['dateResponseDue'] as string).toLocaleDateString('en-GB') : 'N/A',
-      typeof val === 'number' ? val.toLocaleString('en-GB') : 'TBD',
-      String(ce['status'] ?? ''),
+      String(ce['title'] ?? ''),
+      String(ce['clauseRef'] ?? ''),
+      fmtDate(ce['dateNotified']),
+      fmtDate(ce['dateResponseDue']),
+      typeof val === 'number' ? fmtMoney(val) : '',
+      humanize(ce['status']),
     ], widths)
-    if (doc.y > doc.page.height - 80) {
+    if (doc.y > doc.page.height - 110) {
       doc.addPage()
-      doc.y = addLetterhead(doc, meta)
+      addContinuationHeader(doc, meta, 'Compensation Event Summary', `${ces.length} events`)
+      tableRow(doc, cols, widths, true)
     }
   })
 
@@ -369,14 +520,15 @@ export interface DossierData {
 
 export function generateDossierPDF(res: Response, data: DossierData) {
   const meta = data.project
-  const doc = new PDFDocument({ size: 'A4', margin: 40, bufferPages: true })
+  const doc = new PDFDocument({ size: 'A4', margins: { top: 40, left: 40, bottom: 64, right: 40 }, bufferPages: true })
   res.setHeader('Content-Type', 'application/pdf')
   res.setHeader('Content-Disposition', `attachment; filename="${fileNameFor(meta, 'Contract-Dossier')}"`)
   doc.pipe(res)
 
   // Cover
-  const top = addLetterhead(doc, meta)
-  doc.y = addDocumentTitle(doc, 'Contract Dossier', `Complete project record  ·  ${new Date().toLocaleDateString('en-GB')}`, top)
+  addLetterhead(doc, meta)
+  addProjectBanner(doc, meta)
+  doc.y = addDocumentTitle(doc, 'Contract Dossier', `Complete project record  ·  ${fmtDate(new Date())}`)
 
   sectionTitle(doc, 'Contents of this bundle')
   fieldTable(doc, [
@@ -395,14 +547,14 @@ export function generateDossierPDF(res: Response, data: DossierData) {
 
   const newSection = (title: string) => {
     doc.addPage()
-    const t = addLetterhead(doc, meta)
-    doc.y = addDocumentTitle(doc, title, undefined, t)
+    addContinuationHeader(doc, meta, title)
+    sectionTitle(doc, title)
   }
 
   const guardSpace = (needed = 90) => {
     if (doc.y > doc.page.height - needed) {
       doc.addPage()
-      doc.y = addLetterhead(doc, meta)
+      addContinuationHeader(doc, meta)
     }
   }
 
@@ -416,10 +568,10 @@ export function generateDossierPDF(res: Response, data: DossierData) {
     data.earlyWarnings.forEach((ew) => {
       tableRow(doc, [
         String(ew['ewNumber'] ?? ''),
-        String(ew['title'] ?? '').substring(0, 60),
-        ew['dateRaised'] ? new Date(ew['dateRaised'] as string).toLocaleDateString('en-GB') : '',
-        ew['dateRequired'] ? new Date(ew['dateRequired'] as string).toLocaleDateString('en-GB') : 'N/A',
-        String(ew['status'] ?? ''),
+        String(ew['title'] ?? ''),
+        fmtDate(ew['dateRaised']),
+        fmtDate(ew['dateRequired']),
+        humanize(ew['status']),
       ], widths)
       guardSpace()
     })
@@ -436,11 +588,11 @@ export function generateDossierPDF(res: Response, data: DossierData) {
       const cost = r['costImpact']
       tableRow(doc, [
         String(r['riskId'] ?? ''),
-        String(r['description'] ?? '').substring(0, 62),
+        String(r['description'] ?? ''),
         String(r['probability'] ?? ''),
-        typeof cost === 'number' ? cost.toLocaleString('en-GB') : 'N/A',
-        r['timeImpact'] != null ? String(r['timeImpact']) : 'N/A',
-        String(r['status'] ?? ''),
+        typeof cost === 'number' ? fmtMoney(cost) : '',
+        r['timeImpact'] != null ? String(r['timeImpact']) : '',
+        humanize(r['status']),
       ], widths)
       guardSpace()
     })
@@ -456,18 +608,18 @@ export function generateDossierPDF(res: Response, data: DossierData) {
     data.ces.forEach((ce) => {
       tableRow(doc, [
         String(ce['ceNumber'] ?? ''),
-        String(ce['title'] ?? '').substring(0, 48),
-        String(ce['clauseRef'] ?? 'N/A'),
-        ce['dateNotified'] ? new Date(ce['dateNotified'] as string).toLocaleDateString('en-GB') : '',
-        ce['dateResponseDue'] ? new Date(ce['dateResponseDue'] as string).toLocaleDateString('en-GB') : 'N/A',
-        String(ce['status'] ?? ''),
+        String(ce['title'] ?? ''),
+        String(ce['clauseRef'] ?? ''),
+        fmtDate(ce['dateNotified']),
+        fmtDate(ce['dateResponseDue']),
+        humanize(ce['status']),
       ], widths)
       guardSpace()
     })
     const total = data.ces.reduce((s, ce) => s + (typeof ce['valuationAmount'] === 'number' ? ce['valuationAmount'] as number : 0), 0)
     doc.moveDown(0.5)
-    doc.font('Helvetica-Bold').fontSize(9).fillColor(NAVY)
-      .text(`Total valuation: £${total.toLocaleString('en-GB')}`, 40, doc.y)
+    doc.font('Helvetica-Bold').fontSize(9.5).fillColor(NAVY)
+      .text(`Total valuation: ${fmtMoney(total)}`, 40, doc.y)
   }
 
   // Notices - full text, since this is the evidence that matters most
@@ -534,14 +686,15 @@ export function generateCommercialDashboardPDF(
   },
 ) {
   const meta = data.project ?? { name: data.projectName }
-  const doc = new PDFDocument({ size: 'A4', margin: 40, bufferPages: true })
+  const doc = new PDFDocument({ size: 'A4', margins: { top: 40, left: 40, bottom: 64, right: 40 }, bufferPages: true })
   res.setHeader('Content-Type', 'application/pdf')
   res.setHeader('Content-Disposition', `attachment; filename="${fileNameFor(meta, 'Commercial-Report')}"`)
   doc.pipe(res)
 
-  const top = addLetterhead(doc, meta)
+  addLetterhead(doc, meta)
+  addProjectBanner(doc, meta)
   doc.y = addDocumentTitle(doc, 'Commercial Report',
-    `Reporting date: ${new Date().toLocaleDateString('en-GB')}`, top)
+    `Reporting date: ${fmtDate(new Date())}`)
 
   sectionTitle(doc, 'Key Performance Indicators')
   const kpis = [
