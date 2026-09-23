@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Eye, EyeOff } from 'lucide-react'
+import { Eye, EyeOff, ArrowRight, Shield, Lock, User } from 'lucide-react'
 import { login } from '../../api/auth'
 import { useAuthStore } from '../../store/authStore'
 import LogoSpinner from '../../components/ui/LogoSpinner'
@@ -13,6 +13,13 @@ const schema = z.object({
   password: z.string().min(1, 'Password is required'),
 })
 type FormData = z.infer<typeof schema>
+
+const featureItems = [
+  { label: 'Early Warnings', desc: 'NEC cl. 15', icon: Shield },
+  { label: 'Risk Register', desc: 'Live exposure', icon: Lock },
+  { label: 'Comp. Events', desc: 'Full workflow', icon: User },
+  { label: 'Audit Trail', desc: 'Every action', icon: ArrowRight },
+]
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -38,127 +45,218 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-navy-900 flex">
-      {/* Left panel - branding */}
-      <div className="hidden lg:flex lg:w-1/2 flex-col justify-between p-12 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-navy-900 via-navy-800 to-navy-950" />
-        <div className="absolute top-0 left-0 w-full h-full opacity-5"
-          style={{ backgroundImage: 'radial-gradient(circle at 20% 50%, #34D399 0%, transparent 50%), radial-gradient(circle at 80% 20%, #22D3EE 0%, transparent 40%)' }} />
+    <div className="min-h-screen bg-navy-950 flex">
+      {/* Enhanced left panel - branding with sophisticated design */}
+      <div className="hidden lg:flex lg:w-5/12 flex-col justify-between p-12 relative overflow-hidden">
+        {/* Premium gradient background with geometric pattern */}
+        <div className="absolute inset-0 bg-gradient-to-br from-navy-950 via-navy-900 to-navy-800" />
+        
+        {/* Subtle geometric pattern overlay */}
+        <div className="absolute inset-0 opacity-30" 
+          style={{ 
+            backgroundImage: `
+              linear-gradient(120deg, rgba(251, 191, 36, 0.05) 25%, transparent 25%),
+              linear-gradient(80deg, rgba(251, 191, 36, 0.05) 25%, transparent 25%)
+            `, 
+            backgroundSize: '60px 60px' 
+          }} 
+        />
+        
+        {/* Radial highlights for depth */}
+        <div className="absolute top-0 left-0 w-full h-full opacity-[0.07]"
+          style={{ 
+            backgroundImage: `
+              radial-gradient(circle at 25% 30%, #FBBF24 0%, transparent 50%), 
+              radial-gradient(circle at 80% 70%, #3B82F6 0%, transparent 50%)
+            ` 
+          }} 
+        />
 
+        {/* Top branding section */}
         <div className="relative z-10">
-          <div className="flex items-center gap-3">
-            <img src="/logo.png" alt="Aurum" className="w-10 h-10" />
+          <div className="flex items-center gap-4 mb-2">
+            <div className="relative">
+              <img src="/logo.png" alt="Aurum" className="w-12 h-12 drop-shadow-xl" />
+              <div className="absolute -inset-1 bg-gradient-to-br from-brand-yellow/30 to-transparent rounded-full blur-sm"></div>
+            </div>
             <div>
-              <p className="text-white font-display font-bold text-xl leading-none tracking-wide">AURUM</p>
-              <p className="text-brand-yellow font-display text-[10px] font-medium mt-1 tracking-[0.2em] uppercase">Project Controls</p>
+              <p className="text-white font-display font-bold text-2xl leading-none tracking-[0.2em]">AURUM</p>
+              <p className="text-brand-yellow font-display text-xs font-medium mt-1 tracking-[0.3em] uppercase">Project Controls</p>
             </div>
           </div>
         </div>
 
-        <div className="relative z-10">
-          <h1 className="text-4xl font-bold text-white leading-tight mb-4">
+        {/* Main headline with gradient text */}
+        <div className="relative z-10 mb-12">
+          <h1 className="text-4xl font-bold text-white leading-tight mb-6">
             NEC Contract<br />
             <span className="text-gradient-brand">Intelligence Engine</span>
           </h1>
-          <p className="text-slate-400 text-base leading-relaxed max-w-sm">
+          
+          <p className="text-slate-300 text-lg leading-relaxed max-w-md mb-10">
             Digitise Early Warnings, Risk Registers, Compensation Events and commercial reporting - built exclusively for NEC3 and NEC4 contracts.
           </p>
 
-          <div className="mt-10 grid grid-cols-2 gap-4">
-            {[
-              { label: 'Early Warnings', desc: 'NEC cl. 15' },
-              { label: 'Risk Register', desc: 'Live exposure' },
-              { label: 'Comp. Events', desc: 'Full workflow' },
-              { label: 'Audit Trail', desc: 'Every action' },
-            ].map(({ label, desc }) => (
-              <div key={label} className="bg-white/5 border border-white/10 rounded-xl p-4">
-                <p className="text-white text-sm font-medium">{label}</p>
-                <p className="text-slate-500 text-xs mt-0.5">{desc}</p>
+          {/* Enhanced feature grid with icons */}
+          <div className="grid grid-cols-2 gap-4">
+            {featureItems.map(({ label, desc, icon: Icon }) => (
+              <div 
+                key={label} 
+                className="group bg-white/5 border border-white/10 rounded-xl p-4 hover:bg-white/10 transition-all duration-300 hover:border-white/20"
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-yellow/20 to-transparent flex items-center justify-center">
+                    <Icon className="w-4 h-4 text-brand-yellow group-hover:text-white transition-colors" />
+                  </div>
+                  <p className="text-white text-sm font-medium group-hover:text-white transition-colors">{label}</p>
+                </div>
+                <p className="text-slate-400 text-xs group-hover:text-slate-300 transition-colors">{desc}</p>
               </div>
             ))}
           </div>
         </div>
 
-        <p className="relative z-10 text-slate-600 text-xs">
-          © {new Date().getFullYear()} Aurum Project Controls. All rights reserved.
-        </p>
+        {/* Professional footer with security badge */}
+        <div className="relative z-10 flex items-center justify-between pt-8 border-t border-white/5">
+          <div className="flex items-center gap-2 text-sm text-slate-400">
+            <Shield className="w-4 h-4 text-slate-500" />
+            <span>Enterprise-grade security</span>
+          </div>
+          <div className="text-xs text-slate-500">
+            © 2024 Aurum Project Controls
+          </div>
+        </div>
       </div>
 
-      {/* Right panel - login form */}
-      <div className="flex-1 flex items-center justify-center p-6 bg-white">
-        <div className="w-full max-w-sm">
-          {/* Mobile logo */}
-          <div className="flex items-center gap-3 mb-10 lg:hidden">
-            <img src="/logo.png" alt="Aurum" className="w-9 h-9" />
-            <p className="font-display font-bold text-navy-900 text-lg tracking-wide">AURUM <span className="font-medium text-sm tracking-[0.15em] text-slate-500">PROJECT CONTROLS</span></p>
+      {/* Enhanced right panel - refined form card */}
+      <div className="flex w-full lg:w-7/12 items-center justify-center p-8 bg-surface-50 relative">
+        <div className="relative bg-white rounded-2xl shadow-card-lg p-8 sm:p-10 w-full max-w-md border border-slate-100/60">
+          {/* Decorative top accent */}
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-16 h-1 bg-gradient-to-r from-brand-yellow to-navy-600 rounded-full opacity-40"></div>
+
+          {/* Welcome header */}
+          <div className="text-center mb-10">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-navy-900 to-navy-800 flex items-center justify-center mx-auto mb-6 shadow-lg">
+              <img src="/logo.png" alt="Aurum" className="w-8 h-8 object-contain brightness-0 invert" />
+            </div>
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">Welcome back</h2>
+            <p className="text-slate-400 text-sm leading-relaxed">
+              Sign in to your account to continue to Aurum Project Controls
+            </p>
           </div>
 
-          <h2 className="text-2xl font-semibold text-slate-900 mb-1">Welcome back</h2>
-          <p className="text-slate-500 text-sm mb-8">Sign in to your account to continue</p>
-
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+          {/* Login form */}
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Email address</label>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Email address
+              </label>
               <input
                 type="email"
                 placeholder="you@company.com"
-                className={`w-full px-3.5 py-2.5 text-sm rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-brand-green/40 focus:border-brand-green ${errors.email ? 'border-red-400 bg-red-50' : 'border-slate-200 bg-white hover:border-slate-300'}`}
+                className={`w-full px-4 py-3 text-sm rounded-xl border transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-brand-green/30 focus:border-brand-green ${
+                  errors.email
+                    ? 'border-red-400 bg-red-50 placeholder-red-300'
+                    : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm'
+                }`}
                 {...register('email')}
               />
-              {errors.email && <p className="mt-1 text-xs text-red-500">{errors.email.message}</p>}
+              {errors.email && (
+                <p className="mt-2 text-xs text-red-500 flex items-center gap-1">
+                  <span className="w-1 h-1 bg-red-500 rounded-full"></span>
+                  {errors.email.message}
+                </p>
+              )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Password</label>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Password
+              </label>
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}
                   placeholder="••••••••"
-                  className={`w-full px-3.5 py-2.5 pr-10 text-sm rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-brand-green/40 focus:border-brand-green ${errors.password ? 'border-red-400 bg-red-50' : 'border-slate-200 bg-white hover:border-slate-300'}`}
+                  className={`w-full px-4 py-3 pr-12 text-sm rounded-xl border transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-brand-green/30 focus:border-brand-green ${
+                    errors.password
+                      ? 'border-red-400 bg-red-50 placeholder-red-300'
+                      : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm'
+                  }`}
                   {...register('password')}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors p-1.5 rounded-lg hover:bg-slate-100"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
-              {errors.password && <p className="mt-1 text-xs text-red-500">{errors.password.message}</p>}
-              <div className="mt-2 text-right">
-                <Link to="/forgot-password" className="text-xs text-slate-400 hover:text-slate-600 transition-colors">Forgot password?</Link>
+              {errors.password && (
+                <p className="mt-2 text-xs text-red-500 flex items-center gap-1">
+                  <span className="w-1 h-1 bg-red-500 rounded-full"></span>
+                  {errors.password.message}
+                </p>
+              )}
+              <div className="mt-4 text-right">
+                <Link
+                  to="/forgot-password"
+                  className="text-xs text-slate-500 hover:text-navy-800 transition-colors font-medium hover:underline"
+                >
+                  Forgot password?
+                </Link>
               </div>
             </div>
 
+            {/* Server error */}
             {serverError && (
-              <div className="bg-red-50 border border-red-100 rounded-lg px-4 py-3">
-                <p className="text-sm text-red-600">{serverError}</p>
+              <div className="bg-red-50 border border-red-100 rounded-xl px-4 py-3">
+                <p className="text-sm text-red-600 flex items-start gap-2">
+                  <span className="w-1 h-1 bg-red-500 rounded-full mt-1.5 flex-shrink-0"></span>
+                  <span>{serverError}</span>
+                </p>
               </div>
             )}
 
+            {/* Submit button */}
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full py-2.5 px-4 rounded-lg text-sm font-semibold text-navy-900 gradient-brand hover:opacity-90 transition-opacity disabled:opacity-60 disabled:cursor-not-allowed shadow-sm mt-2 flex items-center justify-center gap-2"
+              className="w-full py-3 px-4 rounded-xl text-sm font-semibold text-navy-900 gradient-brand hover:opacity-95 focus:outline-none focus:ring-2 focus:ring-brand-yellow/50 transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed shadow-md hover:shadow-lg flex items-center justify-center gap-2 group"
             >
               {isSubmitting ? (
                 <>
                   <LogoSpinner />
                   Signing in…
                 </>
-              ) : 'Sign in'}
+              ) : (
+                <>
+                  Sign in
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                </>
+              )}
             </button>
           </form>
 
-          <p className="mt-6 text-sm text-slate-500 text-center">
+          {/* Register link */}
+          <p className="mt-8 text-sm text-slate-500 text-center">
             New to Aurum?{' '}
-            <Link to="/register" className="font-medium text-navy-900 hover:underline">Create an account</Link>
+            <Link
+              to="/register"
+              className="font-medium text-navy-800 hover:text-brand-yellow transition-colors hover:underline"
+            >
+              Create an account
+            </Link>
           </p>
 
-          <p className="mt-4 text-xs text-slate-400 text-center">
-            Protected by enterprise-grade security
-          </p>
+          {/* Footer security badge */}
+          <div className="mt-8 pt-6 border-t border-slate-100 text-center">
+            <p className="text-xs text-slate-400 flex items-center justify-center gap-1.5">
+              <Shield className="w-3 h-3" />
+              Protected by enterprise-grade security
+            </p>
+          </div>
         </div>
       </div>
     </div>
