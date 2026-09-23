@@ -45,40 +45,14 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-navy-950 flex">
-      {/* Enhanced left panel - branding with sophisticated design */}
-      <div className="hidden lg:flex lg:w-5/12 flex-col justify-between p-12 relative overflow-hidden">
-        {/* Premium gradient background with geometric pattern */}
-        <div className="absolute inset-0 bg-gradient-to-br from-navy-950 via-navy-900 to-navy-800" />
-        
-        {/* Subtle geometric pattern overlay */}
-        <div className="absolute inset-0 opacity-30" 
-          style={{ 
-            backgroundImage: `
-              linear-gradient(120deg, rgba(251, 191, 36, 0.05) 25%, transparent 25%),
-              linear-gradient(80deg, rgba(251, 191, 36, 0.05) 25%, transparent 25%)
-            `, 
-            backgroundSize: '60px 60px' 
-          }} 
-        />
-        
-        {/* Radial highlights for depth */}
-        <div className="absolute top-0 left-0 w-full h-full opacity-[0.07]"
-          style={{ 
-            backgroundImage: `
-              radial-gradient(circle at 25% 30%, #FBBF24 0%, transparent 50%), 
-              radial-gradient(circle at 80% 70%, #3B82F6 0%, transparent 50%)
-            ` 
-          }} 
-        />
+    <div className="min-h-screen bg-navy-900 flex">
+      {/* Left panel - branding */}
+      <div className="hidden lg:flex lg:w-5/12 flex-col justify-between p-12 relative overflow-hidden bg-navy-900">
 
         {/* Top branding section */}
         <div className="relative z-10">
           <div className="flex items-center gap-4 mb-2">
-            <div className="relative">
-              <img src="/logo.png" alt="Aurum" className="w-12 h-12 drop-shadow-xl" />
-              <div className="absolute -inset-1 bg-gradient-to-br from-brand-yellow/30 to-transparent rounded-full blur-sm"></div>
-            </div>
+            <img src="/logo.png" alt="Aurum" className="w-12 h-12" />
             <div>
               <p className="text-white font-display font-bold text-2xl leading-none tracking-[0.2em]">AURUM</p>
               <p className="text-brand-yellow font-display text-xs font-medium mt-1 tracking-[0.3em] uppercase">Project Controls</p>
@@ -86,11 +60,11 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Main headline with gradient text */}
+        {/* Main headline */}
         <div className="relative z-10 mb-12">
           <h1 className="text-4xl font-bold text-white leading-tight mb-6">
             NEC Contract<br />
-            <span className="text-gradient-brand">Intelligence Engine</span>
+            <span className="text-brand-yellow">Intelligence Engine</span>
           </h1>
           
           <p className="text-slate-300 text-lg leading-relaxed max-w-md mb-10">
@@ -105,7 +79,7 @@ export default function LoginPage() {
                 className="group bg-white/5 border border-white/10 rounded-xl p-4 hover:bg-white/10 transition-all duration-300 hover:border-white/20"
               >
                 <div className="flex items-center gap-3 mb-2">
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-yellow/20 to-transparent flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
                     <Icon className="w-4 h-4 text-brand-yellow group-hover:text-white transition-colors" />
                   </div>
                   <p className="text-white text-sm font-medium group-hover:text-white transition-colors">{label}</p>
@@ -131,12 +105,9 @@ export default function LoginPage() {
       {/* Enhanced right panel - refined form card */}
       <div className="flex w-full lg:w-7/12 items-center justify-center p-8 bg-surface-50 relative">
         <div className="relative bg-white rounded-2xl shadow-card-lg p-8 sm:p-10 w-full max-w-md border border-slate-100/60">
-          {/* Decorative top accent */}
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-16 h-1 bg-gradient-to-r from-brand-yellow to-navy-600 rounded-full opacity-40"></div>
-
           {/* Welcome header */}
           <div className="text-center mb-10">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-navy-900 to-navy-800 flex items-center justify-center mx-auto mb-6 shadow-lg">
+            <div className="w-16 h-16 rounded-2xl bg-navy-900 flex items-center justify-center mx-auto mb-6 shadow-lg">
               <img src="/logo.png" alt="Aurum" className="w-8 h-8 object-contain brightness-0 invert" />
             </div>
             <h2 className="text-2xl font-bold text-slate-900 mb-2">Welcome back</h2>
